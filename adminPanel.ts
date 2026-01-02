@@ -5,9 +5,7 @@ import { sendOrUpdateIndex } from "./index.ts";
 
 const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// =======================
 // Admin Panel
-// =======================
 export async function sendAdminPanel(chatId: number) {
   const keyboard = {
     inline_keyboard: [
@@ -27,7 +25,7 @@ export async function sendAdminPanel(chatId: number) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      chat_id,
+      chat_id: chatId,   // ✅ Make sure this is exactly "chat_id"
       text: "🛠️ <b>BountyFlix Admin Panel</b>",
       parse_mode: "HTML",
       reply_markup: keyboard
@@ -37,9 +35,7 @@ export async function sendAdminPanel(chatId: number) {
   await sendLog(`🛠️ Admin panel opened by ${chatId}`);
 }
 
-// =======================
 // Handle admin callbacks
-// =======================
 export async function handleAdminCallback(data: string) {
   if (data === "admin_send_index") {
     await sendOrUpdateIndex();
@@ -47,9 +43,7 @@ export async function handleAdminCallback(data: string) {
   }
 }
 
-// =======================
-// Set download link confirmation
-// =======================
+// Download link confirmation
 export async function setDownloadUrlPrompt(
   chatId: number,
   title: string,
@@ -69,7 +63,7 @@ export async function setDownloadUrlPrompt(
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      chat_id,
+      chat_id: chatId,  // ✅ Must match exactly
       text: `⚠️ Confirm download link\n\nTitle: <b>${title}</b>\nSeason: <b>${season}</b>\nLink: ${url}`,
       parse_mode: "HTML",
       reply_markup: inlineKeyboard
