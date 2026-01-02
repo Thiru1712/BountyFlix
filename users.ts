@@ -23,7 +23,7 @@ export async function broadcastMessage(message: string) {
         console.error("Failed to send to", userId, err);
       }
     }
-    await new Promise(r => setTimeout(r, 1000)); // avoid rate limit
+    await new Promise(r => setTimeout(r, 1000));
   }
 
   await sendLog(`📢 Broadcast sent to ${users.length} users`);
