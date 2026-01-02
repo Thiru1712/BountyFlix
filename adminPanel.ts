@@ -1,3 +1,5 @@
+  // adminpanel.ts
+
 import { BOT_TOKEN } from "./config.ts";
 import { sendLog } from "./logging.ts";
 
