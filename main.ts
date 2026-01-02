@@ -7,7 +7,7 @@ import { handleCallback } from "./callbacks.ts";
 import { sendAdminPanel, setDownloadUrlPrompt } from "./adminPanel.ts";
 import { sendAnimeAnnouncement } from "./announcements.ts";
 import { handleNewUser, broadcastMessage } from "./users.ts";
-import { saveSeason } from "./titles.ts";
+import { addSeason as saveSeason } from "./titles.ts";
 import { sendOrUpdateIndex, pinMessage } from "./indexMessage.ts";
 import { sendLog, LogType } from "./logging.ts";
 import { redis, getIndexMessageId } from "./redis.ts";
