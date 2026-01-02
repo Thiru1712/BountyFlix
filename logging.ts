@@ -1,3 +1,5 @@
+  //logging.ts
+
 import { BOT_TOKEN, LOG_CHANNEL_ID } from "./config.ts";
 
 export async function sendLog(text: string) {
