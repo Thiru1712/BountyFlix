@@ -1,81 +1,106 @@
- // callbacks.ts
+// callbacks.ts
 
-import { BOT_TOKEN } from "./config.ts";
-import { getTitles, getSeasons, getDownloadLink, setDownloadLink } from "./titles.ts";
+import { BOT_TOKEN, INDEX_CHANNEL_ID } from "./config.ts";
+import {
+  getTitles,
+  getSeasons,
+  getDownloadLink,
+  setDownloadLink,
+} from "./titles.ts";
 import { sendLog } from "./logging.ts";
+import { showLetterPicker, askTitleName } from "./adminTitles.ts";
+import { handleAdminCallback } from "./adminPanel.ts";
 
 const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-export async function handleCallback(cb: any) {
-  const data = cb.data;
-  const chatId = cb.message.chat.id;
-  const messageId = cb.message.message_id;
+export async function handleCallback(callback: any) {
+  const data = callback.data;
+  const chatId = callback.message.chat.id;
+  const messageId = callback.message.message_id;
 
-  // LETTER
+  // ===== ADMIN =====
+  if (data.startsWith("admin_")) {
+    await handleAdminCallback(data);
+    return;
+  }
+
+  if (data === "admin_titles") {
+    await showLetterPicker(chatId);
+    return;
+  }
+
+  if (data.startsWith("add_title_letter:")) {
+    const letter = data.split(":")[1];
+    await askTitleName(chatId, letter);
+    await sendLog(`🛠️ Admin adding title under ${letter}`);
+    return;
+  }
+
+  // ===== INDEX FLOW =====
   if (data.startsWith("letter:")) {
     const letter = data.split(":")[1];
     const titles = await getTitles(letter);
 
-    if (!titles.length) {
-      return answer(cb, "❌ No titles found");
-    }
+    const buttons = titles.map((t) => [
+      { text: t, callback_data: `title:${t}` },
+    ]);
 
-    const kb = titles.map(t => [{ text: t, callback_data: `title:${t}` }]);
-    kb.push([{ text: "⬅ Back", callback_data: "main_menu" }]);
+    buttons.push([{ text: "⬅ Back", callback_data: "main_menu" }]);
 
-    await edit(chatId, messageId, `📂 Titles starting with ${letter}`, kb);
+    await editMessage(
+      INDEX_CHANNEL_ID,
+      messageId,
+      `Titles starting with <b>${letter}</b>:`,
+      buttons
+    );
   }
 
-  // TITLE → SEASONS
   else if (data.startsWith("title:")) {
     const title = data.split(":")[1];
     const seasons = await getSeasons(title);
 
-    const kb = seasons.map(s => [{ text: s, callback_data: `season:${title}:${s}` }]);
-    kb.push([{ text: "⬅ Back", callback_data: `letter:${title[0]}` }]);
+    const buttons = seasons.map((s) => [
+      { text: s, callback_data: `season:${title}:${s}` },
+    ]);
 
-    await edit(chatId, messageId, `🎬 ${title}\nChoose season:`, kb);
+    buttons.push([{ text: "⬅ Back", callback_data: "main_menu" }]);
+
+    await editMessage(
+      INDEX_CHANNEL_ID,
+      messageId,
+      `<b>${title}</b> — Select season`,
+      buttons
+    );
   }
 
-  // SEASON → DOWNLOAD
   else if (data.startsWith("season:")) {
     const [, title, season] = data.split(":");
     const link = await getDownloadLink(title, season);
 
-    if (!link) {
-      return answer(cb, "❌ Download not set yet");
-    }
-
-    await edit(chatId, messageId, `${title} – ${season}`, [
-      [{ text: "✅ Download Now", url: link }],
-      [{ text: "⬅ Back", callback_data: `title:${title}` }],
-    ]);
+    await editMessage(
+      INDEX_CHANNEL_ID,
+      messageId,
+      `<b>${title}</b>\n${season}`,
+      [[{ text: "⬇ Download", url: link }]]
+    );
   }
-
-  await answer(cb);
 }
 
-async function edit(chatId: number, msgId: number, text: string, kb: any[]) {
+async function editMessage(
+  chatId: number,
+  messageId: number,
+  text: string,
+  inlineKeyboard: any[]
+) {
   await fetch(`${API}/editMessageText`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       chat_id: chatId,
-      message_id: msgId,
+      message_id: messageId,
       text,
-      reply_markup: { inline_keyboard: kb },
-    }),
-  });
-}
-
-async function answer(cb: any, text = "") {
-  await fetch(`${API}/answerCallbackQuery`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      callback_query_id: cb.id,
-      text,
-      show_alert: false,
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: inlineKeyboard },
     }),
   });
 }
