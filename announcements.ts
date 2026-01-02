@@ -1,3 +1,5 @@
+  // announcements.ts
+
 import { BOT_TOKEN, ANNOUNCE_CHANNEL_ID } from "./config.ts";
 import { sendLog } from "./logging.ts";
 
