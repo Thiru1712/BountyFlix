@@ -1,8 +1,10 @@
 import { BOT_TOKEN, INDEX_CHANNEL_ID } from "./config.ts";
-import { getTitles, getSeasons, getDownloadLink } from "./titles.ts";
+import { getTitles, getSeasons, getDownloadLink, setDownloadLink } from "./titles.ts";
+import { sendLog } from "./logging.ts";
 
 export async function handleCallback(callback: any) {
   const data = callback.data;
+  const chatId = callback.message.chat.id;
   const messageId = callback.message.message_id;
 
   // A–Z letter selected
@@ -38,9 +40,25 @@ export async function handleCallback(callback: any) {
     await editMessage(INDEX_CHANNEL_ID, messageId, `${title} - ${season}`, buttons);
   }
 
-  // Back to main menu
+  // Confirm download
+  else if (data.startsWith("confirm_download:")) {
+    const parts = data.split(":");
+    const title = parts[1];
+    const season = parts[2];
+    const url = parts.slice(3).join(":");
+
+    await setDownloadLink(title, season, url);
+    await editMessage(chatId, messageId, `✅ Download link set!\nTitle: ${title}\nSeason: ${season}\nLink: ${url}`, []);
+    await sendLog(`🛠️ Admin set download link for ${title} - ${season}`);
+  }
+
+  // Cancel download
+  else if (data === "cancel_download") {
+    await editMessage(chatId, messageId, "❌ Download link setting canceled.", []);
+  }
+
+  // Main menu A–Z
   else if (data === "main_menu") {
-    // Rebuild main A–Z menu
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
     const rows = [];
     for (let i = 0; i < alphabet.length; i += 4) {
@@ -50,15 +68,15 @@ export async function handleCallback(callback: any) {
   }
 }
 
-async function editMessage(chatId: string, messageId: number, text: string, inlineKeyboard: any) {
+async function editMessage(chatId: number, messageId: number, text: string, inlineKeyboard: any[]) {
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      chat_id: chatId,
-      message_id: messageId,
+      chat_id,
+      message_id,
       text,
-      reply_markup: { inline_keyboard: inlineKeyboard },
+      reply_markup: inlineKeyboard.length ? { inline_keyboard: inlineKeyboard } : undefined,
       parse_mode: "HTML"
     })
   });
