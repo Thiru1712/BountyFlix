@@ -1,13 +1,12 @@
 import { BOT_TOKEN, ADMIN_IDS, INDEX_CHANNEL_ID } from "./config.ts";
-import { sendAdminPanel } from "./adminPanel.ts";
+import { sendAdminPanel, setDownloadUrlPrompt } from "./adminPanel.ts";
 import { handleCallback } from "./callbacks.ts";
 import { sendAnimeAnnouncement } from "./announcements.ts";
 import { handleNewUser, broadcastMessage } from "./users.ts";
-import { sendLog } from "./logging.ts";
 
 const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// Initial setup — send main A–Z inline keyboard if needed
+// Send main A–Z inline keyboard
 async function sendIndexMenu() {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
   const rows = [];
@@ -15,7 +14,7 @@ async function sendIndexMenu() {
     rows.push(alphabet.slice(i, i + 4).map(l => ({ text: l, callback_data: `letter:${l}` })));
   }
 
-  const res = await fetch(`${API}/sendMessage`, {
+  await fetch(`${API}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -24,12 +23,9 @@ async function sendIndexMenu() {
       reply_markup: { inline_keyboard: rows }
     })
   });
-
-  const data = await res.json();
-  console.log("Index message sent", data.result.message_id);
 }
 
-sendIndexMenu(); // send when bot starts (optional)
+sendIndexMenu();
 
 while (true) {
   try {
@@ -38,7 +34,6 @@ while (true) {
     const updates = data.result || [];
 
     for (const update of updates) {
-      // Handle messages
       if (update.message) {
         const chatId = update.message.chat.id;
         const userId = update.message.from.id;
@@ -67,9 +62,16 @@ while (true) {
           const link = parts[2].trim();
           await sendAnimeAnnouncement(title, season, link);
         }
+
+        if (text?.startsWith("/setdownload")) {
+          const parts = text.replace("/setdownload", "").trim().split("|");
+          const title = parts[0].trim();
+          const season = parts[1].trim();
+          const url = parts[2].trim();
+          await setDownloadUrlPrompt(userId, title, season, url);
+        }
       }
 
-      // Handle callback queries (inline buttons)
       if (update.callback_query) {
         await handleCallback(update.callback_query);
       }
