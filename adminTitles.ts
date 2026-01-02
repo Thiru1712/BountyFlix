@@ -1,3 +1,5 @@
+  // adminTitles.ts
+
 import { BOT_TOKEN } from "./config.ts";
 import { saveTitle } from "./titles.ts";
 import { sendLog } from "./logging.ts";
