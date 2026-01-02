@@ -1,85 +1,81 @@
-  //callbacks.ts
+ // callbacks.ts
 
-import { BOT_TOKEN, INDEX_CHANNEL_ID } from "./config.ts";
+import { BOT_TOKEN } from "./config.ts";
 import { getTitles, getSeasons, getDownloadLink, setDownloadLink } from "./titles.ts";
 import { sendLog } from "./logging.ts";
 
-export async function handleCallback(callback: any) {
-  const data = callback.data;
-  const chatId = callback.message.chat.id;
-  const messageId = callback.message.message_id;
+const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-  // A–Z letter selected
+export async function handleCallback(cb: any) {
+  const data = cb.data;
+  const chatId = cb.message.chat.id;
+  const messageId = cb.message.message_id;
+
+  // LETTER
   if (data.startsWith("letter:")) {
     const letter = data.split(":")[1];
     const titles = await getTitles(letter);
 
-    const buttons = titles.map(title => [{ text: title, callback_data: `title:${title}` }]);
-    buttons.push([{ text: "⬅️ Back", callback_data: "main_menu" }]);
+    if (!titles.length) {
+      return answer(cb, "❌ No titles found");
+    }
 
-    await editMessage(INDEX_CHANNEL_ID, messageId, `Titles starting with ${letter}:`, buttons);
+    const kb = titles.map(t => [{ text: t, callback_data: `title:${t}` }]);
+    kb.push([{ text: "⬅ Back", callback_data: "main_menu" }]);
+
+    await edit(chatId, messageId, `📂 Titles starting with ${letter}`, kb);
   }
 
-  // Title selected → show seasons
+  // TITLE → SEASONS
   else if (data.startsWith("title:")) {
     const title = data.split(":")[1];
     const seasons = await getSeasons(title);
 
-    const buttons = seasons.map(season => [{ text: season, callback_data: `season:${title}:${season}` }]);
-    buttons.push([{ text: "⬅️ Back", callback_data: "letter_menu" }]);
+    const kb = seasons.map(s => [{ text: s, callback_data: `season:${title}:${s}` }]);
+    kb.push([{ text: "⬅ Back", callback_data: `letter:${title[0]}` }]);
 
-    await editMessage(INDEX_CHANNEL_ID, messageId, `${title} - Choose Season:`, buttons);
+    await edit(chatId, messageId, `🎬 ${title}\nChoose season:`, kb);
   }
 
-  // Season selected → show download button
+  // SEASON → DOWNLOAD
   else if (data.startsWith("season:")) {
-    const [_, title, season] = data.split(":");
+    const [, title, season] = data.split(":");
     const link = await getDownloadLink(title, season);
 
-    const buttons = [[{ text: "✅ Download Now", url: link }]];
-    buttons.push([{ text: "⬅️ Back", callback_data: `title:${title}` }]);
-
-    await editMessage(INDEX_CHANNEL_ID, messageId, `${title} - ${season}`, buttons);
-  }
-
-  // Confirm download
-  else if (data.startsWith("confirm_download:")) {
-    const parts = data.split(":");
-    const title = parts[1];
-    const season = parts[2];
-    const url = parts.slice(3).join(":");
-
-    await setDownloadLink(title, season, url);
-    await editMessage(chatId, messageId, `✅ Download link set!\nTitle: ${title}\nSeason: ${season}\nLink: ${url}`, []);
-    await sendLog(`🛠️ Admin set download link for ${title} - ${season}`);
-  }
-
-  // Cancel download
-  else if (data === "cancel_download") {
-    await editMessage(chatId, messageId, "❌ Download link setting canceled.", []);
-  }
-
-  // Main menu A–Z
-  else if (data === "main_menu") {
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-    const rows = [];
-    for (let i = 0; i < alphabet.length; i += 4) {
-      rows.push(alphabet.slice(i, i + 4).map(l => ({ text: l, callback_data: `letter:${l}` })));
+    if (!link) {
+      return answer(cb, "❌ Download not set yet");
     }
-    await editMessage(INDEX_CHANNEL_ID, messageId, "Choose a letter 👇", rows);
+
+    await edit(chatId, messageId, `${title} – ${season}`, [
+      [{ text: "✅ Download Now", url: link }],
+      [{ text: "⬅ Back", callback_data: `title:${title}` }],
+    ]);
   }
+
+  await answer(cb);
 }
 
-async function editMessage(chatId: number, messageId: number, text: string, inlineKeyboard: any[]) {
-  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`, {
+async function edit(chatId: number, msgId: number, text: string, kb: any[]) {
+  await fetch(`${API}/editMessageText`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      chat_id,
-      message_id,
+      chat_id: chatId,
+      message_id: msgId,
       text,
-      reply_markup: inlineKeyboard.length ? { inline_keyboard: inlineKeyboard } : undefined,
-      parse_mode: "HTML"
-    })
+      reply_markup: { inline_keyboard: kb },
+    }),
+  });
+}
+
+async function answer(cb: any, text = "") {
+  await fetch(`${API}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      callback_query_id: cb.id,
+      text,
+      show_alert: false,
+    }),
   });
 }
