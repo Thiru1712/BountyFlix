@@ -1,5 +1,5 @@
 import { REDIS_URL, REDIS_TOKEN } from "./config.ts";
-import { connect } from "https://deno.land/x/upstash_redis/mod.ts";
+import { connect } from "https://deno.land/x/upstash_redis@v1.35.0/mod.ts";
 
 export const redis = await connect({
   url: REDIS_URL,
