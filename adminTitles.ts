@@ -1,7 +1,7 @@
    // adminTitles.ts
 
 import { BOT_TOKEN } from "./config.ts";
-import { saveTitle } from "./titles.ts";
+import { addTitle as saveTitle } from "./titles.ts";
 import { sendLog, LogType } from "./logging.ts";
 import { sendOrUpdateIndex } from "./indexMessage.ts";
 
