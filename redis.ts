@@ -1,73 +1,24 @@
-// redis.ts
+  // redis.ts
 
-import { Redis } from "https://deno.land/x/upstash_redis@v1.20.0/mod.ts";
-import { REDIS_URL, REDIS_TOKEN } from "./config.ts";
+import Redis from "npm:ioredis";
 
-// Connect to Upstash Redis
-export const redis = new Redis({
-  url: REDIS_URL,
-  token: REDIS_TOKEN,
+// Railway provides REDIS_URL automatically
+const REDIS_URL = Deno.env.get("REDIS_URL");
+
+if (!REDIS_URL) {
+  console.error("❌ REDIS_URL is not set");
+  throw new Error("REDIS_URL missing");
+}
+
+export const redis = new Redis(REDIS_URL, {
+  maxRetriesPerRequest: 3,
+  enableReadyCheck: true,
 });
 
-// =======================
-// User Management
-// =======================
+redis.on("connect", () => {
+  console.log("✅ Redis connected");
+});
 
-// Add user to Redis set
-export async function addUser(userId: number) {
-  await redis.sadd("users", userId.toString());
-}
-
-// Get all users
-export async function getUsers(): Promise<string[]> {
-  return (await redis.smembers("users")) || [];
-}
-
-// =======================
-// Titles / Seasons
-// =======================
-
-// Save a title under a letter
-export async function saveTitle(letter: string, title: string) {
-  await redis.sadd(`letters:${letter}`, title);
-}
-
-// Get all titles under a letter
-export async function getTitles(letter: string): Promise<string[]> {
-  return (await redis.smembers(`letters:${letter}`)) || [];
-}
-
-// Save a season under a title
-export async function saveSeason(title: string, season: string) {
-  await redis.sadd(`title:${title}`, season);
-}
-
-// Get all seasons for a title
-export async function getSeasons(title: string): Promise<string[]> {
-  return (await redis.smembers(`title:${title}`)) || [];
-}
-
-// =======================
-// Download Links
-// =======================
-
-// Set download link for a title+season
-export async function setDownloadLink(title: string, season: string, url: string) {
-  await redis.set(`season:${title}:${season}`, url);
-}
-
-// Get download link for a title+season
-export async function getDownloadLink(title: string, season: string): Promise<string | null> {
-  return await redis.get(`season:${title}:${season}`);
-}
-
-// ===== INDEX MESSAGE STORAGE =====
-
-export async function saveIndexMessageId(messageId: number) {
-  await redis.set("index:message_id", messageId.toString());
-}
-
-export async function getIndexMessageId(): Promise<number | null> {
-  const id = await redis.get("index:message_id");
-  return id ? Number(id) : null;
-}
+redis.on("error", (err) => {
+  console.error("❌ Redis error:", err);
+});
