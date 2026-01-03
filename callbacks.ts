@@ -1,25 +1,27 @@
   // callbacks.ts
 
 import { BOT_TOKEN, INDEX_CHANNEL_ID } from "./config.ts";
-import { getTitles, getSeasons, getDownloadLink } from "./titles.ts";
-import { sendLog, LogType } from "./logging.ts";
-import { showLetterPicker, askTitleName, saveAdminTitle } from "./adminTitles.ts";
+import {
+  getTitles,
+  getSeasons,
+  getDownloadLink,
+} from "./titles.ts";
+import { sendLog } from "./logging.ts";
+import { showLetterPicker } from "./adminTitles.ts";
 import { handleAdminCallback } from "./adminPanel.ts";
 
 const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// Temp state for adding title name: adminId -> letter
-const pendingTitleLetter: Record<number, string> = {};
-
 export async function handleCallback(callback: any) {
-  const data = callback.data;
+  const data: string = callback.data;
   const chatId = callback.message.chat.id;
   const messageId = callback.message.message_id;
-  const adminId = callback.from.id;
 
-  // ===== Admin Panel Actions =====
+  // ========================
+  // ADMIN CALLBACKS
+  // ========================
   if (data.startsWith("admin_")) {
-    await handleAdminCallback(data);
+    await handleAdminCallback(data, chatId);
     return;
   }
 
@@ -28,24 +30,9 @@ export async function handleCallback(callback: any) {
     return;
   }
 
-  if (data.startsWith("add_title_letter:")) {
-    const letter = data.split(":")[1];
-    pendingTitleLetter[adminId] = letter;
-    await askTitleName(chatId, letter);
-    await sendLog(LogType.ADMIN, `🛠️ Admin is adding title under ${letter}`);
-    return;
-  }
-
-  // Admin sent title name via inline callback
-  if (data.startsWith("save_title:")) {
-    const title = data.split(":")[1];
-    const letter = pendingTitleLetter[adminId];
-    delete pendingTitleLetter[adminId];
-    await saveAdminTitle(chatId, letter, title);
-    return;
-  }
-
-  // ===== INDEX FLOW =====
+  // ========================
+  // INDEX NAVIGATION
+  // ========================
   if (data.startsWith("letter:")) {
     const letter = data.split(":")[1];
     const titles = await getTitles(letter);
@@ -53,32 +40,50 @@ export async function handleCallback(callback: any) {
     const buttons = titles.map((t) => [
       { text: t, callback_data: `title:${t}` },
     ]);
+
     buttons.push([{ text: "⬅ Back", callback_data: "main_menu" }]);
 
     await editMessage(
       INDEX_CHANNEL_ID,
       messageId,
-      `Titles starting with <b>${letter}</b>:`,
+      `📂 <b>Titles starting with ${letter}</b>`,
       buttons
     );
-  } else if (data.startsWith("title:")) {
+    return;
+  }
+
+  if (data.startsWith("title:")) {
     const title = data.split(":")[1];
     const seasons = await getSeasons(title);
 
     const buttons = seasons.map((s) => [
       { text: s, callback_data: `season:${title}:${s}` },
     ]);
+
     buttons.push([{ text: "⬅ Back", callback_data: "main_menu" }]);
 
     await editMessage(
       INDEX_CHANNEL_ID,
       messageId,
-      `<b>${title}</b> — Select season`,
+      `🎬 <b>${title}</b>\nSelect season`,
       buttons
     );
-  } else if (data.startsWith("season:")) {
+    return;
+  }
+
+  if (data.startsWith("season:")) {
     const [, title, season] = data.split(":");
     const link = await getDownloadLink(title, season);
+
+    if (!link) {
+      await editMessage(
+        INDEX_CHANNEL_ID,
+        messageId,
+        "❌ Download link not available",
+        [[{ text: "⬅ Back", callback_data: "main_menu" }]]
+      );
+      return;
+    }
 
     await editMessage(
       INDEX_CHANNEL_ID,
@@ -86,9 +91,25 @@ export async function handleCallback(callback: any) {
       `<b>${title}</b>\n${season}`,
       [[{ text: "⬇ Download", url: link }]]
     );
+
+    await sendLog(`📂 Download clicked: ${title} → ${season}`);
+    return;
+  }
+
+  if (data === "main_menu") {
+    await editMessage(
+      INDEX_CHANNEL_ID,
+      messageId,
+      "🎬 <b>BountyFlix Index</b>\n\nChoose a letter:",
+      buildAZKeyboard()
+    );
+    return;
   }
 }
 
+// ========================
+// HELPERS
+// ========================
 async function editMessage(
   chatId: number,
   messageId: number,
@@ -106,4 +127,20 @@ async function editMessage(
       reply_markup: { inline_keyboard: inlineKeyboard },
     }),
   });
+}
+
+function buildAZKeyboard() {
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  const rows = [];
+
+  for (let i = 0; i < letters.length; i += 6) {
+    rows.push(
+      letters.slice(i, i + 6).map((l) => ({
+        text: l,
+        callback_data: `letter:${l}`,
+      }))
+    );
+  }
+
+  return rows;
 }
