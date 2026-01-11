@@ -1,4 +1,4 @@
-# main.py
+ # main.py
 
 import os
 import time
@@ -19,11 +19,10 @@ from callbacks import main_menu, movies_menu
 from admin import handle_broadcast, handle_add_title, admin_panel
 from rate_limit import is_allowed
 
-# ---------------- HEALTH ----------------
+# ---------------- HEALTH SERVER ----------------
 app = Flask(__name__)
 START_TIME = time.time()
 LAST_HEARTBEAT = time.time()
-BOT_OK = True
 
 @app.route("/")
 def home():
@@ -32,7 +31,7 @@ def home():
 @app.route("/health")
 def health():
     return jsonify({
-        "status": "ok" if BOT_OK else "error",
+        "status": "ok",
         "uptime": int(time.time() - START_TIME),
         "heartbeat": int(time.time() - LAST_HEARTBEAT),
     }), 200
@@ -43,11 +42,12 @@ def run_web():
     app.run(host="0.0.0.0", port=port)
 
 
-# ---------------- HANDLERS ----------------
+# ---------------- BOT HANDLERS ----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_allowed(uid, "command"):
         return
+
     await update.message.reply_text(
         "🎬 Welcome to BountyFlix",
         reply_markup=main_menu()
@@ -58,9 +58,11 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_allowed(uid, "admin"):
         return
+
     if not is_admin(uid):
         await update.message.reply_text("❌ Admin only")
         return
+
     await update.message.reply_text(
         "👑 Admin Panel",
         reply_markup=admin_panel()
@@ -90,21 +92,22 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-# ---------------- BOT LOOP ----------------
+# ---------------- BOT RUNNER ----------------
 async def bot_main():
-    app_bot = ApplicationBuilder().token(BOT_TOKEN).build()
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    app_bot.add_handler(CommandHandler("start", start))
-    app_bot.add_handler(CommandHandler("admin", admin))
-    app_bot.add_handler(CommandHandler("broadcast", handle_broadcast))
-    app_bot.add_handler(CommandHandler("addtitle", handle_add_title))
-    app_bot.add_handler(CallbackQueryHandler(callback_handler))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("admin", admin))
+    application.add_handler(CommandHandler("broadcast", handle_broadcast))
+    application.add_handler(CommandHandler("addtitle", handle_add_title))
+    application.add_handler(CallbackQueryHandler(callback_handler))
 
     print("🤖 Telegram bot started")
-    await app_bot.run_polling()
+    await application.run_polling()
 
 
 def start_bot():
+    global LAST_HEARTBEAT
     while True:
         try:
             asyncio.run(bot_main())
