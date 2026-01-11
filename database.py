@@ -1,4 +1,4 @@
-  # database.py
+ # database.py
 
 import os
 import sys
@@ -28,12 +28,12 @@ menu_state_col = db["menu_state"]
 approved_content_col.create_index([("letter", ASCENDING)])
 approved_content_col.create_index([("slug", ASCENDING)], unique=True)
 
-# ---------------- SLUG ----------------
+# ---------- HELPERS ----------
 
 def normalize_slug(text: str) -> str:
     return text.strip().lower().replace(" ", "_").replace("-", "_")
 
-# ---------------- CONTENT ----------------
+# ---------- CONTENT ----------
 
 def get_letters_available():
     return sorted(approved_content_col.distinct("letter"))
@@ -61,7 +61,10 @@ def submit_pending_content(title, description, seasons, submitted_by):
         "submitted_at": datetime.utcnow(),
         "status": "pending"
     }
-    pending_content_col.insert_one(doc)
+    try:
+        pending_content_col.insert_one(doc)
+    except Exception:
+        return None
     return doc
 
 def approve_content(pending_id, approved_by):
@@ -71,7 +74,6 @@ def approve_content(pending_id, approved_by):
 
     doc.pop("_id")
     doc.pop("status")
-
     doc["approved_by"] = approved_by
     doc["approved_at"] = datetime.utcnow()
 
@@ -79,7 +81,7 @@ def approve_content(pending_id, approved_by):
     pending_content_col.delete_one({"_id": pending_id})
     return True
 
-# ---------------- BROADCAST ----------------
+# ---------- BROADCAST ----------
 
 def submit_pending_broadcast(title, body, button_text, redirect, submitted_by):
     doc = {
@@ -99,7 +101,7 @@ def get_pending_broadcast(broadcast_id):
 def approve_broadcast(broadcast_id):
     pending_broadcasts_col.delete_one({"_id": broadcast_id})
 
-# ---------------- ANALYTICS ----------------
+# ---------- ANALYTICS ----------
 
 def inc_stat(field):
     stats_col.update_one(
@@ -111,7 +113,7 @@ def inc_stat(field):
 def get_stats():
     return stats_col.find_one({"_id": "global"})
 
-# ---------------- PIN STATE ----------------
+# ---------- PIN STATE ----------
 
 def get_pinned_menu():
     return menu_state_col.find_one({"_id": "alphabet_menu"})
