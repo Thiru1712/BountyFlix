@@ -1,11 +1,10 @@
-  # main.py
+ # main.py
 
 import os
 import time
 import asyncio
 import threading
 from flask import Flask, jsonify
-
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -13,6 +12,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
 )
+from telegram.error import BadRequest
 
 from callbacks import (
     alphabet_menu,
@@ -32,9 +32,11 @@ from database import (
     get_content_by_slug,
     inc_stat,
     get_stats,
+    get_pinned_menu,
+    save_pinned_menu,
 )
 from rate_limit import is_allowed
-from config import OWNER_ID
+from config import OWNER_ID, CHANNEL_ID
 
 # ======================================================
 # HEALTH SERVER
@@ -60,6 +62,48 @@ def run_web():
     app.run(host="0.0.0.0", port=port)
 
 # ======================================================
+# AUTO-PIN ALPHABET MENU
+# ======================================================
+
+async def pin_alphabet_menu(application):
+    try:
+        old = get_pinned_menu()
+        if old:
+            try:
+                await application.bot.unpin_chat_message(
+                    chat_id=CHANNEL_ID,
+                    message_id=old["message_id"]
+                )
+                await application.bot.delete_message(
+                    chat_id=CHANNEL_ID,
+                    message_id=old["message_id"]
+                )
+            except BadRequest:
+                pass
+
+        msg = await application.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=(
+                "🎬 <b>Welcome to AnimeExplorers</b>\n\n"
+                "Browse anime & movies alphabetically 👇"
+            ),
+            reply_markup=alphabet_menu(),
+            parse_mode="HTML"
+        )
+
+        await application.bot.pin_chat_message(
+            chat_id=CHANNEL_ID,
+            message_id=msg.message_id,
+            disable_notification=True
+        )
+
+        save_pinned_menu(msg.message_id)
+        print("📌 Alphabet menu pinned")
+
+    except Exception as e:
+        print("❌ Failed to pin alphabet menu:", e)
+
+# ======================================================
 # COMMANDS
 # ======================================================
 
@@ -69,8 +113,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text(
-        "🎬 <b>Browse Anime & Movies</b>\n\n"
-        "Select a letter to begin 👇",
+        "🎬 <b>Browse Anime & Movies</b>\n\nSelect a letter 👇",
         reply_markup=alphabet_menu(),
         parse_mode="HTML"
     )
@@ -82,20 +125,14 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         "🛠 <b>BountyFlix Admin Help</b>\n\n"
-        "<b>Available Commands:</b>\n\n"
-        "🔹 /start\n"
-        "Show alphabet (A–Z) menu\n\n"
-        "🔹 /addanime\n"
-        "Add a new anime/movie (approval required)\n"
+        "🔹 /start\nShow A–Z menu\n\n"
+        "🔹 /addanime\nAdd anime/movie (approval required)\n"
         "<code>/addanime Title | S1=link , S2=link</code>\n\n"
-        "🔹 /broadcast\n"
-        "Send an embed broadcast (approval required)\n"
+        "🔹 /broadcast\nSend embed broadcast (approval required)\n"
         "<code>/broadcast Title | Message | Button | Link</code>\n\n"
-        "🔹 /stats\n"
-        "View bot analytics & health\n\n"
-        "🔹 /help\n"
-        "Show this help message\n\n"
-        "⚠️ All actions require approval before going live."
+        "🔹 /stats\nView analytics & bot health\n\n"
+        "🔹 /help\nShow this help\n\n"
+        "⚠️ Nothing goes live without approval."
     )
 
     await update.message.reply_text(text, parse_mode="HTML")
@@ -110,7 +147,6 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         "📊 <b>BountyFlix Analytics</b>\n\n"
-        "<b>Usage</b>\n"
         f"🔤 Alphabet clicks: {stats.get('alphabet_clicks', 0)}\n"
         f"🎬 Anime clicks: {stats.get('anime_clicks', 0)}\n"
         f"📺 Season clicks: {stats.get('season_clicks', 0)}\n"
@@ -137,7 +173,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer()
 
-    # ---------- ADMIN APPROVAL ----------
+    # ---------- ADMIN ----------
     if data.startswith("approve:"):
         await approve_callback(update, context)
         return
@@ -158,7 +194,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("letter:"):
         inc_stat("alphabet_clicks")
         letter = data.split(":")[1]
-
         await query.edit_message_text(
             f"🔤 <b>Titles starting with {letter}</b>",
             reply_markup=titles_menu(letter),
@@ -222,6 +257,10 @@ async def bot_main():
     application.add_handler(CallbackQueryHandler(callback_handler))
 
     print("🤖 BountyFlix bot started")
+
+    # Auto-pin alphabet menu on startup
+    await pin_alphabet_menu(application)
+
     await application.run_polling()
 
 
