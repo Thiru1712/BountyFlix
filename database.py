@@ -169,3 +169,31 @@ def get_pending_broadcast(broadcast_id):
 
 def approve_broadcast(broadcast_id):
     pending_broadcasts_col.delete_one({"_id": broadcast_id})
+
+# ================== ANALYTICS ==================
+
+stats_col = db["stats"]
+
+def init_stats():
+    if not stats_col.find_one({"_id": "global"}):
+        stats_col.insert_one({
+            "_id": "global",
+            "alphabet_clicks": 0,
+            "anime_clicks": 0,
+            "season_clicks": 0,
+            "download_clicks": 0,
+            "last_updated": datetime.utcnow()
+        })
+
+def inc_stat(field: str):
+    stats_col.update_one(
+        {"_id": "global"},
+        {
+            "$inc": {field: 1},
+            "$set": {"last_updated": datetime.utcnow()}
+        },
+        upsert=True
+    )
+
+def get_stats():
+    return stats_col.find_one({"_id": "global"})
