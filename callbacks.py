@@ -96,3 +96,12 @@ def download_menu(slug: str, season: int):
             InlineKeyboardButton("⬅ Back", callback_data=f"back:seasons:{slug}")
         ]
     ])
+
+# ---------------- ADMIN APPROVAL CALLBACKS ----------------
+
+def admin_approval_handler(data: str):
+    if data.startswith("approve:"):
+        return "approve"
+    if data.startswith("reject:"):
+        return "reject"
+    return None
