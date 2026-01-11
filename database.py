@@ -147,3 +147,25 @@ def approve_content(pending_id, approved_by: int):
     pending_content_col.delete_one({"_id": pending_id})
 
     return True
+
+# ---------------- BROADCAST HELPERS ----------------
+
+def submit_pending_broadcast(title, body, button_text, redirect, submitted_by):
+    doc = {
+        "title": title,
+        "body": body,
+        "button_text": button_text,
+        "redirect": redirect,
+        "submitted_by": submitted_by,
+        "submitted_at": datetime.utcnow(),
+        "status": "pending"
+    }
+    return pending_broadcasts_col.insert_one(doc).inserted_id
+
+
+def get_pending_broadcast(broadcast_id):
+    return pending_broadcasts_col.find_one({"_id": broadcast_id})
+
+
+def approve_broadcast(broadcast_id):
+    pending_broadcasts_col.delete_one({"_id": broadcast_id})
