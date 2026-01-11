@@ -1,16 +1,17 @@
  # callbacks.py
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from database import (
-    get_letters_available,
-    get_titles_by_letter,
-    get_content_by_slug,
-)
+from database import get_letters_available, get_titles_by_letter, get_content_by_slug
 
 def alphabet_menu():
     letters = get_letters_available()
-    keyboard, row = [], []
 
+    if not letters:
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("No content yet", callback_data="noop")]
+        ])
+
+    keyboard, row = [], []
     for l in letters:
         row.append(InlineKeyboardButton(l, callback_data=f"letter:{l}"))
         if len(row) == 5:
@@ -21,7 +22,6 @@ def alphabet_menu():
         keyboard.append(row)
 
     return InlineKeyboardMarkup(keyboard)
-
 
 def titles_menu(letter):
     titles = get_titles_by_letter(letter)
@@ -37,7 +37,6 @@ def titles_menu(letter):
     )
     return InlineKeyboardMarkup(keyboard)
 
-
 def seasons_menu(slug):
     content = get_content_by_slug(slug)
 
@@ -47,7 +46,6 @@ def seasons_menu(slug):
         ])
 
     keyboard, row = [], []
-
     for s in content.get("seasons", []):
         row.append(
             InlineKeyboardButton(
@@ -67,19 +65,8 @@ def seasons_menu(slug):
     )
     return InlineKeyboardMarkup(keyboard)
 
-
 def download_menu(slug, season):
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "⬇ Download Now",
-                callback_data=f"redirect:{slug}:{season}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "⬅ Back",
-                callback_data=f"back:seasons:{slug}"
-            )
-        ]
+        [InlineKeyboardButton("⬇ Download Now", callback_data=f"redirect:{slug}:{season}")],
+        [InlineKeyboardButton("⬅ Back", callback_data=f"back:seasons:{slug}")]
     ])
