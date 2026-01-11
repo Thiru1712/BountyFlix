@@ -197,3 +197,20 @@ def inc_stat(field: str):
 
 def get_stats():
     return stats_col.find_one({"_id": "global"})
+
+# ================== CHANNEL MENU STATE ==================
+
+menu_state_col = db["menu_state"]
+
+def get_pinned_menu():
+    return menu_state_col.find_one({"_id": "alphabet_menu"})
+
+def save_pinned_menu(message_id: int):
+    menu_state_col.update_one(
+        {"_id": "alphabet_menu"},
+        {"$set": {"message_id": message_id}},
+        upsert=True
+    )
+
+def clear_pinned_menu():
+    menu_state_col.delete_one({"_id": "alphabet_menu"})
