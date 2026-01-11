@@ -1,23 +1,39 @@
  # admin.py
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from bson import ObjectId
 
-from config import OWNER_ID
+from config import is_admin
 from database import (
     submit_pending_content,
-    approve_content,
-    submit_pending_broadcast,
-    get_pending_broadcast,
-    approve_broadcast,
-    users_col,
+    get_all_movies,
+    delete_movie,
 )
 
-# ---------- ADD ANIME ----------
+# ---------- /admin ----------
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Admins only")
+        return
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Add Movie", callback_data="admin:add")],
+        [InlineKeyboardButton("🗑 Delete Movie", callback_data="admin:delete")]
+    ])
+
+    await update.message.reply_text(
+        "🛠 <b>Admin Panel</b>",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
+
+# ---------- ADD MOVIE ----------
 
 async def addanime_submit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Admins only")
         return
 
     raw = update.message.text.replace("/addanime", "").strip()
@@ -28,106 +44,53 @@ async def addanime_submit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     title, seasons_raw = raw.split("|", 1)
-    title = title.strip()
     seasons = []
 
     for part in seasons_raw.split(","):
         if "=" not in part:
             continue
         key, link = part.split("=", 1)
-        num = int(key.strip().replace("S", "").replace("Season", ""))
+        num = int(key.strip().replace("S", ""))
         seasons.append({
             "season": num,
             "button_text": f"Season {num}",
             "redirect": link.strip()
         })
 
-    doc = submit_pending_content(title, "", seasons, update.effective_user.id)
+    doc = submit_pending_content(title.strip(), seasons, update.effective_user.id)
     if not doc:
-        await update.message.reply_text("❌ Duplicate title / slug")
+        await update.message.reply_text("❌ Movie already exists")
         return
 
-    kb = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Approve", callback_data=f"approve:{doc['_id']}"),
-            InlineKeyboardButton("❌ Cancel", callback_data=f"reject:{doc['_id']}")
-        ]
-    ])
+    await update.message.reply_text("✅ Movie added successfully")
 
-    await update.message.reply_text(
-        f"📝 <b>Preview</b>\n\n🎬 <b>{title}</b>",
-        reply_markup=kb,
-        parse_mode="HTML"
-    )
+# ---------- DELETE FLOW ----------
 
-async def approve_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    if q.from_user.id != OWNER_ID:
-        return
-    approve_content(ObjectId(q.data.split(":")[1]), OWNER_ID)
-    await q.edit_message_text("✅ Approved & live 🎉")
+    data = q.data
 
-async def reject_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.edit_message_text("❌ Cancelled")
-
-# ---------- BROADCAST ----------
-
-async def broadcast_submit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
+    if not is_admin(q.from_user.id):
+        await q.answer("Admins only")
         return
 
-    raw = update.message.text.replace("/broadcast", "").strip()
-    try:
-        title, body, btn, link = [x.strip() for x in raw.split("|", 3)]
-    except ValueError:
-        await update.message.reply_text(
-            "❌ Format:\n/broadcast Title | Message | Button | Link"
+    if data == "admin:delete":
+        movies = get_all_movies()
+        if not movies:
+            await q.edit_message_text("No movies available")
+            return
+
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton(m["title"], callback_data=f"delete:{m['_id']}")]
+            for m in movies
+        ])
+
+        await q.edit_message_text(
+            "🗑 Select movie to delete:",
+            reply_markup=kb
         )
-        return
 
-    bid = submit_pending_broadcast(title, body, btn, link, OWNER_ID)
-
-    kb = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Send", callback_data=f"approve_broadcast:{bid}"),
-            InlineKeyboardButton("❌ Cancel", callback_data=f"reject_broadcast:{bid}")
-        ]
-    ])
-
-    await update.message.reply_text(
-        f"📢 <b>{title}</b>\n\n{body}",
-        reply_markup=kb,
-        parse_mode="HTML"
-    )
-
-async def approve_broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    bid = ObjectId(q.data.split(":")[1])
-    data = get_pending_broadcast(bid)
-
-    if not data:
-        await q.edit_message_text("❌ Broadcast not found")
-        return
-
-    approve_broadcast(bid)
-
-    for u in users_col.find({}, {"user_id": 1}):
-        try:
-            await context.bot.send_message(
-                u["user_id"],
-                f"📢 <b>{data['title']}</b>\n\n{data['body']}",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(data["button_text"], url=data["redirect"])]
-                ]),
-                parse_mode="HTML"
-            )
-        except Exception:
-            pass
-
-    await q.edit_message_text("✅ Broadcast sent")
-
-async def reject_broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    bid = ObjectId(q.data.split(":")[1])
-    approve_broadcast(bid)
-    await q.edit_message_text("❌ Broadcast cancelled")
+    elif data.startswith("delete:"):
+        movie_id = data.split(":")[1]
+        delete_movie(movie_id)
+        await q.edit_message_text("✅ Movie deleted")
